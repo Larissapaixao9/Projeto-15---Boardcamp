@@ -3,6 +3,7 @@ import pg from 'pg';
 import dotenv from 'dotenv'
 import authSchema1 from  './validations/validation_schema1.js'
 import authSchema2 from  './validations/validation_schema2.js'
+import authSchemaCustomer from './validations/validation_schema_customers.js'
 
 dotenv.config()
 //npm run devStart
@@ -35,9 +36,9 @@ app.get('/categories', (req, res) => {
 app.post('/categories', async(req, res) => {
     const { name } = req.body;
     const result=await authSchema1.validateAsync(req.body)
-    const { Error } = result;
+    const { error } = result;
 
-    if(Error){
+    if(error){
       return res.status(400).send('error joi')
     }
     const allNames=await connection.query('SELECT categories.name FROM categories')
@@ -113,22 +114,101 @@ app.post('/categories', async(req, res) => {
 
 
 
-          
+
   ////////////////////////////////////////////////////////////////////////
                       //ROTAS CUSTOMERS
-app.get('/api/products/:id', (req, res) => {
+    app.get('/customers', (req, res) => {
+        const queryStringParameter = req.query.cpf
+        console.log(queryStringParameter)
+        if(queryStringParameter){
+          connection.query(`SELECT customers.* FROM customers WHERE customers.cpf LIKE ($1)`,[`${queryStringParameter}%`]).then(item=>{
+            return res.send(item.rows)
+          })
+        }
+       else{
+        connection.query('SELECT * FROM customers').then(item => {
+          return res.send(item.rows);
+          });
+       }
+
+    });
+  
+  
+app.get('/customers/:id', async(req, res) => {
   const id = parseInt(req.params.id);
 
   if (isNaN(id)) {
     return res.sendStatus(400);
   }
 
-  connection.query('SELECT * FROM produtos WHERE id=$1', [id]).then(produtos => {
-    const produto = produtos.rows[0];
-    if (!produto) return res.sendStatus(404);
-    res.send(produto);
+  const allCustomersId=await connection.query('SELECT customers.id FROM customers')
+  const ids=allCustomersId.rows
+  console.log(allCustomersId.rows)
+  const find_customer_ID = ids.some(x=>x.id===id);
+  if(!find_customer_ID){
+    return res.status(404).send('Numero do ID do cliente não existe')
+  }
+
+  connection.query('SELECT * FROM customers WHERE id=$1', [id]).then(customers => {
+    const item = customers.rows[0];
+    if (!item) return res.sendStatus(404);
+    res.send(item);
   });
 });
+
+app.post('/customers', async(req, res) => {
+
+  const { name, phone, cpf, birthday } = req.body
+  const result=await authSchemaCustomer.validateAsync(req.body)
+  console.log(result.error)
+  const allcpf=await connection.query('SELECT customers.cpf FROM customers')
+  
+  const cpfs = allcpf.rows
+
+  const findEqual=cpfs.some(item=>item.cpf===cpf);
+  if(findEqual){
+    return res.status(409).send('esse cpf já foi usado')
+  }
+
+  console.log(cpfs)
+  console.log(findEqual)
+  
+  connection.query('INSERT INTO customers (name, phone, cpf, birthday) VALUES ($1, $2, $3, $4)', [name, phone, cpf, birthday]).then(() => {
+    return res.sendStatus(201);
+  });
+});
+
+app.put('/customers/:id',async(req,res)=>{
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    return res.sendStatus(400);
+  }
+
+  const { name, phone, cpf, birthday } = req.body;
+
+  const allcpf=await connection.query('SELECT customers.cpf FROM customers')
+  
+  const cpfs = allcpf.rows
+
+  const findEqual=cpfs.some(item=>item.cpf===cpf);
+  if(findEqual){
+    return res.status(409).send('esse cpf já foi usado')
+  }
+  connection.query('UPDATE customers SET name=$1, phone=$2, cpf=$3, birthday=$4  WHERE id=$5',[name,phone, cpf,birthday,id]).then(()=>{
+    return res.sendStatus(200)
+  })
+})
+
+
+
+
+
+
+
+
+
+
+
 
 
 
